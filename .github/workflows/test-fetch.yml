@@ -1,0 +1,150 @@
+name: 测试黄金数据获取
+
+on:
+  workflow_dispatch: # 只允许手动触发，用于测试
+
+jobs:
+  test-fetch:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+    
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 安装依赖
+      run: |
+        pip install requests pandas openpyxl
+        
+    - name: 测试获取黄金数据
+      run: |
+        cd gold
+        echo "🧪 开始测试黄金数据获取..."
+        python xinlang.py
+        echo "✅ 数据获取完成"
+        
+    - name: 检查生成的文件
+      run: |
+        cd gold
+        echo "📋 检查生成的文件:"
+        
+        # 检查JSON文件
+        for file in jewelry_gold_latest.json physical_gold_latest.json gold_bar_latest.json; do
+          if [ -f "$file" ]; then
+            count=$(jq length "$file" 2>/dev/null || echo "0")
+            echo "✅ $file: $count 条记录"
+          else
+            echo "❌ $file: 文件不存在"
+          fi
+        done
+        
+        # 检查Excel文件
+        if [ -f "combined_gold_data.xlsx" ]; then
+          echo "✅ combined_gold_data.xlsx: 合并文件已生成"
+        else
+          echo "❌ combined_gold_data.xlsx: 合并文件未生成"
+        fi
+        
+        # 显示文件大小
+        echo ""
+        echo "📊 文件大小统计:"
+        ls -lh *.json *.xlsx *.html 2>/dev/null | awk '{print $9 ": " $5}' || echo "没有找到数据文件"
+        
+    - name: 验证数据质量
+      run: |
+        cd gold
+        echo "🔍 验证数据质量..."
+        
+        # 检查JSON格式是否正确
+        for file in *_latest.json; do
+          if [ -f "$file" ]; then
+            if jq empty "$file" 2>/dev/null; then
+              echo "✅ $file: JSON格式正确"
+            else
+              echo "❌ $file: JSON格式错误"
+            fi
+          fi
+        done
+        
+        # 检查数据是否包含必要字段
+        if [ -f "jewelry_gold_latest.json" ]; then
+          required_fields=("日期" "品牌" "产品" "价格" "黄金类型")
+          sample_record=$(jq '.[0]' jewelry_gold_latest.json 2>/dev/null)
+          
+          if [ "$sample_record" != "null" ] && [ "$sample_record" != "" ]; then
+            echo "✅ 数据记录示例:"
+            echo "$sample_record" | jq .
+            
+            for field in "${required_fields[@]}"; do
+              if echo "$sample_record" | jq -e "has(\"$field\")" >/dev/null 2>&1; then
+                echo "✅ 包含字段: $field"
+              else
+                echo "❌ 缺少字段: $field"
+              fi
+            done
+          else
+            echo "❌ 无法获取数据记录示例"
+          fi
+        fi
+        
+    - name: 生成测试报告
+      run: |
+        cd gold
+        echo "📋 生成测试报告..."
+        
+        {
+          echo "# 黄金数据获取测试报告"
+          echo ""
+          echo "## 测试时间"
+          echo "- UTC时间: $(date -u '+%Y-%m-%d %H:%M:%S')"
+          echo "- 北京时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || date '+%Y-%m-%d %H:%M:%S')"
+          echo ""
+          echo "## 数据统计"
+          
+          total_records=0
+          for file in jewelry_gold_latest.json physical_gold_latest.json gold_bar_latest.json; do
+            if [ -f "$file" ]; then
+              count=$(jq length "$file" 2>/dev/null || echo "0")
+              total_records=$((total_records + count))
+              case "$file" in
+                jewelry_gold_latest.json) echo "- 首饰黄金: $count 条" ;;
+                physical_gold_latest.json) echo "- 实物黄金: $count 条" ;;
+                gold_bar_latest.json) echo "- 金条: $count 条" ;;
+              esac
+            fi
+          done
+          
+          echo "- **总计: $total_records 条记录**"
+          echo ""
+          echo "## 生成的文件"
+          echo "\`\`\`"
+          ls -la *.json *.xlsx *.html 2>/dev/null || echo "没有找到数据文件"
+          echo "\`\`\`"
+          echo ""
+          echo "## 测试结果"
+          if [ $total_records -gt 0 ]; then
+            echo "✅ **测试成功** - 数据获取正常"
+          else
+            echo "❌ **测试失败** - 未获取到数据"
+          fi
+          
+        } > test_report.md
+        
+        echo "📄 测试报告内容:"
+        cat test_report.md
+        
+    - name: 上传测试报告
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-report
+        path: gold/test_report.md
+        
+    - name: 清理测试文件
+      run: |
+        cd gold
+        rm -f test_report.md
+        echo "🧹 测试完成，临时文件已清理"
