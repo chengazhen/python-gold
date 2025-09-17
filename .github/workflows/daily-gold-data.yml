@@ -14,7 +14,7 @@ jobs:
     - name: 检出代码
       uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.ACCESS_TOKEN }}
         
     - name: 设置Python环境
       uses: actions/setup-python@v4
@@ -79,13 +79,13 @@ jobs:
       if: steps.check_changes.outputs.has_changes == 'true'
       uses: ad-m/github-push-action@master
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.ACCESS_TOKEN }}
         branch: main
         directory: gold
         
     - name: 创建数据摘要
       if: steps.check_changes.outputs.has_changes == 'true'
-      run: |
+      run: |  
         cd gold
         CURRENT_DATE=$(date '+%Y-%m-%d')
         
