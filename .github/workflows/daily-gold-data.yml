@@ -22,12 +22,10 @@ jobs:
 
     - name: 获取数据
       run: |
-        cd gold
         python xinlang.py
 
     - name: 提交数据
       run: |
-        cd gold
         git config user.name "GitHub Action"
         git config user.email "action@github.com"
         git add *.json *.xlsx *.html
