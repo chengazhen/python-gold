@@ -1,0 +1,138 @@
+name: 每日黄金数据获取
+
+on:
+  schedule:
+    # 每天北京时间上午10点运行 (UTC时间凌晨2点)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  fetch-gold-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pandas openpyxl
+        
+    - name: 获取黄金数据
+      run: |
+        cd gold
+        python xinlang.py
+        
+    - name: 检查是否有新数据
+      id: check_changes
+      run: |
+        cd gold
+        if git diff --quiet; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "没有新的数据变化"
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "检测到新的数据变化"
+        fi
+        
+    - name: 提交数据变化
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        cd gold
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # 添加所有数据文件
+        git add *.json *.xlsx *.html
+        
+        # 生成提交信息
+        CURRENT_DATE=$(date '+%Y-%m-%d %H:%M:%S')
+        COMMIT_MSG="🔄 自动更新黄金数据 - ${CURRENT_DATE}"
+        
+        # 统计数据量
+        JEWELRY_COUNT=$(jq length jewelry_gold_latest.json 2>/dev/null || echo "0")
+        PHYSICAL_COUNT=$(jq length physical_gold_latest.json 2>/dev/null || echo "0")
+        GOLD_BAR_COUNT=$(jq length gold_bar_latest.json 2>/dev/null || echo "0")
+        TOTAL_COUNT=$((JEWELRY_COUNT + PHYSICAL_COUNT + GOLD_BAR_COUNT))
+        
+        DETAILED_MSG="${COMMIT_MSG}
+
+📊 数据统计:
+• 首饰黄金: ${JEWELRY_COUNT} 条
+• 实物黄金: ${PHYSICAL_COUNT} 条  
+• 金条: ${GOLD_BAR_COUNT} 条
+• 总计: ${TOTAL_COUNT} 条
+
+🤖 由GitHub Action自动生成"
+        
+        git commit -m "${DETAILED_MSG}"
+        
+    - name: 推送到仓库
+      if: steps.check_changes.outputs.has_changes == 'true'
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        branch: main
+        directory: gold
+        
+    - name: 创建数据摘要
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        cd gold
+        CURRENT_DATE=$(date '+%Y-%m-%d')
+        
+        # 生成数据摘要
+        echo "# 黄金数据更新摘要 - ${CURRENT_DATE}" > data_summary.md
+        echo "" >> data_summary.md
+        echo "## 📊 数据统计" >> data_summary.md
+        
+        if [ -f "jewelry_gold_latest.json" ]; then
+          JEWELRY_COUNT=$(jq length jewelry_gold_latest.json)
+          echo "- 首饰黄金: ${JEWELRY_COUNT} 条记录" >> data_summary.md
+        fi
+        
+        if [ -f "physical_gold_latest.json" ]; then
+          PHYSICAL_COUNT=$(jq length physical_gold_latest.json)
+          echo "- 实物黄金: ${PHYSICAL_COUNT} 条记录" >> data_summary.md
+        fi
+        
+        if [ -f "gold_bar_latest.json" ]; then
+          GOLD_BAR_COUNT=$(jq length gold_bar_latest.json)
+          echo "- 金条: ${GOLD_BAR_COUNT} 条记录" >> data_summary.md
+        fi
+        
+        echo "" >> data_summary.md
+        echo "## 📁 生成的文件" >> data_summary.md
+        echo "- JSON数据文件: \`*_latest.json\`" >> data_summary.md
+        echo "- 分析结果: \`*_latest_analysis.json\`" >> data_summary.md
+        echo "- Excel文件: \`*_latest.xlsx\`" >> data_summary.md
+        echo "- 原始网页: \`*_latest.html\`" >> data_summary.md
+        echo "- 合并数据: \`combined_gold_data.xlsx\`" >> data_summary.md
+        echo "" >> data_summary.md
+        echo "## 🕐 更新时间" >> data_summary.md
+        echo "北京时间: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> data_summary.md
+        echo "UTC时间: $(date -u '+%Y-%m-%d %H:%M:%S')" >> data_summary.md
+        
+        cat data_summary.md
+        
+    - name: 发送通知 (可选)
+      if: steps.check_changes.outputs.has_changes == 'true'
+      run: |
+        echo "✅ 黄金数据已成功更新并提交到仓库"
+        echo "📅 更新时间: $(date '+%Y-%m-%d %H:%M:%S')"
+        
+    - name: 清理临时文件
+      if: always()
+      run: |
+        cd gold
+        # 清理可能的临时文件
+        rm -f data_summary.md
+        echo "🧹 清理完成"

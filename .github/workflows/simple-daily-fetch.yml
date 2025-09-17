@@ -1,0 +1,48 @@
+name: 简化版每日黄金数据获取
+
+on:
+  schedule:
+    # 每天北京时间上午10点 (UTC+8 = UTC 02:00)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: 安装依赖
+      run: |
+        pip install requests pandas openpyxl
+        
+    - name: 获取黄金数据
+      run: |
+        cd gold
+        python xinlang.py
+        
+    - name: 提交数据
+      run: |
+        cd gold
+        git config user.name "GitHub Action"
+        git config user.email "action@github.com"
+        
+        # 添加数据文件
+        git add *.json *.xlsx *.html
+        
+        # 检查是否有变化
+        if ! git diff --cached --quiet; then
+          # 生成提交信息
+          DATE=$(date '+%Y-%m-%d %H:%M')
+          git commit -m "🔄 自动更新黄金数据 ${DATE}"
+          git push
+          echo "✅ 数据已更新并提交"
+        else
+          echo "ℹ️ 没有数据变化，跳过提交"
+        fi

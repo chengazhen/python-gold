@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首饰黄金价格数据分析报告</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
+    <script src="gold_data.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+            margin-bottom: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            background: white;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .data-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .data-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .price-up {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .price-down {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .price-same {
+            color: #95a5a6;
+            font-weight: bold;
+        }
+
+        .brand-legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 20px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .filter-group label {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: white;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+            }
+            
+            .chart-wrapper {
+                height: 300px;
+            }
+            
+            .filters {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏆 黄金价格数据分析报告</h1>
+            <p>基于新浪财经数据的深度分析 | 支持首饰黄金、实物黄金、金条数据</p>
+
+            <!-- 数据类型选择器 -->
+            <div style="margin-top: 20px;">
+                <select id="goldTypeSelector" onchange="switchGoldType()" style="padding: 10px 15px; font-size: 16px; border-radius: 8px; border: 2px solid white; background: rgba(255,255,255,0.9); color: #333;">
+                    <option value="jewelry">首饰黄金</option>
+                    <option value="physical">实物黄金</option>
+                    <option value="gold_bar">金条</option>
+                    <option value="all">全部类型对比</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 统计概览 -->
+        <div class="stats-grid">
+            <!-- <div class="stat-card">
+                <div class="stat-value" id="totalRecords">50</div>
+                <div class="stat-label">总记录数</div>
+            </div> -->
+            <div class="stat-card">
+                <div class="stat-value" id="avgPrice">加载中...</div>
+                <div class="stat-label">平均价格(元/克)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="maxPrice">加载中...</div>
+                <div class="stat-label">最高价格(元/克)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="minPrice">加载中...</div>
+                <div class="stat-label">最低价格(元/克)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="risePercent">加载中...</div>
+                <div class="stat-label">上涨比例</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="brandCount">加载中...</div>
+                <div class="stat-label">品牌数量</div>
+            </div>
+        </div>
+
+        <!-- 标签页 -->
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('trend')">价格趋势</button>
+            <button class="tab" onclick="showTab('brand')">品牌对比</button>
+            <button class="tab" onclick="showTab('comparison')">类型对比</button>
+            <button class="tab" onclick="showTab('table')">数据表格</button>
+            <button class="tab" onclick="showTab('analysis')">深度分析</button>
+        </div>
+
+        <!-- 价格趋势图 -->
+        <div id="trend" class="tab-content active">
+            <div class="chart-container">
+                <h3 class="chart-title">黄金价格走势图</h3>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>选择品牌:</label>
+                        <select id="brandFilter" onchange="updateTrendChart()">
+                            <option value="all">全部品牌</option>
+                            <option value="周大福">周大福</option>
+                            <option value="六福">六福</option>
+                            <option value="周生生">周生生</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="trendChart"></canvas>
+                </div>
+                <div class="brand-legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #667eea;"></div>
+                        <span>周大福</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f093fb;"></div>
+                        <span>六福</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4facfe;"></div>
+                        <span>周生生</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 品牌对比图 -->
+        <div id="brand" class="tab-content">
+            <div class="chart-container">
+                <h3 class="chart-title">品牌价格对比</h3>
+                <div class="chart-wrapper">
+                    <canvas id="brandChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 类型对比图 -->
+        <div id="comparison" class="tab-content">
+            <div class="chart-container">
+                <h3 class="chart-title">黄金类型价格对比</h3>
+                <div class="chart-wrapper">
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+                <div style="margin-top: 20px; text-align: center; color: #666;">
+                    <p>对比不同类型黄金的平均价格、价格区间和波动情况</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据表格 -->
+        <div id="table" class="tab-content">
+            <div class="chart-container">
+                <h3 class="chart-title">详细数据表格</h3>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>筛选品牌:</label>
+                        <select id="tableBrandFilter" onchange="updateTable()">
+                            <option value="all">全部品牌</option>
+                            <option value="周大福">周大福</option>
+                            <option value="六福">六福</option>
+                            <option value="周生生">周生生</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>排序方式:</label>
+                        <select id="sortBy" onchange="updateTable()">
+                            <option value="date">按日期</option>
+                            <option value="price">按价格</option>
+                            <option value="brand">按品牌</option>
+                        </select>
+                    </div>
+                </div>
+                <table class="data-table" id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>黄金类型</th>
+                            <th>品牌</th>
+                            <th>产品</th>
+                            <th>价格(元/克)</th>
+                            <th>涨跌</th>
+                            <th>数据来源</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 深度分析 -->
+        <div id="analysis" class="tab-content">
+            <div class="chart-container">
+                <h3 class="chart-title">深度分析报告</h3>
+                <div style="line-height: 1.8; font-size: 1.1rem;">
+                    <h4 style="color: #667eea; margin: 20px 0 15px 0;">📊 数据概览</h4>
+                    <p>本次分析涵盖2025年9月1日至17日共17天的黄金价格数据，包含周大福、六福、周生生三大知名珠宝品牌的50条有效记录。</p>
+                    
+                    <h4 style="color: #667eea; margin: 20px 0 15px 0;">📈 价格趋势分析</h4>
+                    <p>• <strong>价格区间：</strong>921-1077元/克，波动幅度达156元/克<br>
+                    • <strong>平均价格：</strong>1021.4元/克，中位数为1050元/克<br>
+                    • <strong>整体趋势：</strong>56%的记录显示价格上涨，仅8%下跌，36%持平</p>
+                    
+                    <h4 style="color: #667eea; margin: 20px 0 15px 0;">🏢 品牌表现对比</h4>
+                    <p>• <strong>周大福：</strong>17条记录，价格相对稳定，多在1050-1077元区间<br>
+                    • <strong>六福：</strong>17条记录，与周大福价格高度一致<br>
+                    • <strong>周生生：</strong>16条记录，价格明显低于前两者，多在921-966元区间</p>
+                    
+                    <h4 style="color: #667eea; margin: 20px 0 15px 0;">💡 投资建议</h4>
+                    <p>• 周生生价格相对较低，可能存在投资机会<br>
+                    • 周大福和六福价格走势高度一致，建议关注市场整体趋势<br>
+                    • 近期价格上涨趋势明显，需关注风险控制</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量存储数据
+        let allGoldData = {
+            jewelry: [],
+            physical: [],
+            gold_bar: []
+        };
+        let currentGoldType = 'jewelry';
+        let goldData = []; // 当前显示的数据
+
+        // 数据文件映射
+        const dataFiles = {
+            jewelry: 'jewelry_gold_latest.json',
+            physical: 'physical_gold_latest.json',
+            gold_bar: 'gold_bar_latest.json'
+        };
+
+        // 从JSON文件加载数据
+        async function loadGoldData() {
+            try {
+                // 加载所有类型的数据
+                for (const [type, filename] of Object.entries(dataFiles)) {
+                    try {
+                        const response = await fetch(filename);
+                        if (response.ok) {
+                            allGoldData[type] = await response.json();
+                            console.log(`${type}数据加载成功，共${allGoldData[type].length}条记录`);
+                        } else {
+                            console.warn(`无法加载${filename}文件`);
+                            allGoldData[type] = [];
+                        }
+                    } catch (error) {
+                        console.warn(`加载${filename}失败:`, error);
+                        allGoldData[type] = [];
+                    }
+                }
+
+                // 设置初始数据
+                switchGoldType();
+
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                // 如果加载失败，尝试加载旧格式数据
+                try {
+                    const response = await fetch('gold_data_complete.json');
+                    if (response.ok) {
+                        goldData = await response.json();
+                        allGoldData.jewelry = goldData;
+                        initializePage();
+                    }
+                } catch (fallbackError) {
+                    document.body.innerHTML = `
+                        <div style="text-align: center; padding: 50px; color: red;">
+                            <h2>数据加载失败</h2>
+                            <p>无法加载黄金数据文件</p>
+                            <p>请确保数据文件存在</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // 切换黄金类型
+        function switchGoldType() {
+            const selector = document.getElementById('goldTypeSelector');
+            currentGoldType = selector.value;
+
+            if (currentGoldType === 'all') {
+                // 合并所有数据用于对比
+                goldData = [
+                    ...allGoldData.jewelry,
+                    ...allGoldData.physical,
+                    ...allGoldData.gold_bar
+                ];
+            } else {
+                goldData = allGoldData[currentGoldType] || [];
+            }
+
+            console.log(`切换到${currentGoldType}，数据量:${goldData.length}`);
+            initializePage();
+        }
+
+        // 初始化页面
+        function initializePage() {
+            updateStatistics();
+            updateTrendChart();
+            updateBrandChart();
+            updateComparisonChart();
+            updateTable();
+        }
+
+        // 更新统计数据
+        function updateStatistics() {
+            if (goldData.length === 0) return;
+
+            // 计算统计数据
+            const prices = goldData.map(item => item.价格_数值);
+            const avgPrice = (prices.reduce((sum, price) => sum + price, 0) / prices.length).toFixed(1);
+            const maxPrice = Math.max(...prices).toFixed(1);
+            const minPrice = Math.min(...prices).toFixed(1);
+
+            // 计算上涨比例
+            const riseCount = goldData.filter(item => item.涨跌 === '涨').length;
+            const risePercent = ((riseCount / goldData.length) * 100).toFixed(1);
+
+            // 计算品牌数量
+            const brands = [...new Set(goldData.map(item => item.品牌))];
+            const brandCount = brands.length;
+
+            // 更新页面显示
+            document.getElementById('avgPrice').textContent = avgPrice;
+            document.getElementById('maxPrice').textContent = maxPrice;
+            document.getElementById('minPrice').textContent = minPrice;
+            document.getElementById('risePercent').textContent = risePercent + '%';
+            document.getElementById('brandCount').textContent = brandCount;
+        }
+
+        let trendChart, brandChart, comparisonChart;
+
+        // 标签页切换
+        function showTab(tabName) {
+            // 隐藏所有标签页内容
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // 移除所有标签的active类
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // 显示选中的标签页
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            // 如果切换到图表标签页，重新渲染图表
+            if (tabName === 'trend' && trendChart) {
+                updateTrendChart();
+            } else if (tabName === 'brand' && brandChart) {
+                updateBrandChart();
+            } else if (tabName === 'comparison' && comparisonChart) {
+                updateComparisonChart();
+            } else if (tabName === 'table') {
+                updateTable();
+            }
+        }
+
+        // 更新趋势图
+        function updateTrendChart() {
+            const selectedBrand = document.getElementById('brandFilter').value;
+            let filteredData = goldData;
+            
+            if (selectedBrand !== 'all') {
+                filteredData = goldData.filter(item => item.品牌 === selectedBrand);
+            }
+            
+            // 按日期分组数据
+            const groupedData = {};
+            filteredData.forEach(item => {
+                if (!groupedData[item.日期]) {
+                    groupedData[item.日期] = {};
+                }
+                groupedData[item.日期][item.品牌] = item.价格_数值;
+            });
+            
+            const dates = Object.keys(groupedData).sort();
+            const brands = ['周大福', '六福', '周生生'];
+            const colors = ['#667eea', '#f093fb', '#4facfe'];
+            
+            const datasets = brands.map((brand, index) => {
+                const data = dates.map(date => groupedData[date][brand] || null);
+                return {
+                    label: brand,
+                    data: data,
+                    borderColor: colors[index],
+                    backgroundColor: colors[index] + '20',
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                };
+            });
+            
+            if (trendChart) {
+                trendChart.destroy();
+            }
+            
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '黄金价格走势图'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '价格 (元/克)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '日期'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新品牌对比图
+        function updateBrandChart() {
+            const brandStats = {};
+            goldData.forEach(item => {
+                if (!brandStats[item.品牌]) {
+                    brandStats[item.品牌] = {
+                        prices: [],
+                        count: 0
+                    };
+                }
+                brandStats[item.品牌].prices.push(item.价格_数值);
+                brandStats[item.品牌].count++;
+            });
+
+            const brands = Object.keys(brandStats);
+            const avgPrices = brands.map(brand => {
+                const prices = brandStats[brand].prices;
+                return prices.reduce((sum, price) => sum + price, 0) / prices.length;
+            });
+
+            if (brandChart) {
+                brandChart.destroy();
+            }
+
+            const ctx = document.getElementById('brandChart').getContext('2d');
+            brandChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: brands,
+                    datasets: [{
+                        label: '平均价格 (元/克)',
+                        data: avgPrices,
+                        backgroundColor: ['#667eea', '#f093fb', '#4facfe'],
+                        borderColor: ['#667eea', '#f093fb', '#4facfe'],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '品牌平均价格对比'
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '平均价格 (元/克)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新类型对比图
+        function updateComparisonChart() {
+            const typeStats = {};
+            const typeNames = {
+                jewelry: '首饰黄金',
+                physical: '实物黄金',
+                gold_bar: '金条'
+            };
+
+            // 计算每种类型的统计数据
+            Object.keys(allGoldData).forEach(type => {
+                const data = allGoldData[type];
+                if (data && data.length > 0) {
+                    const prices = data.map(item => item.价格_数值).filter(price => price > 0);
+                    if (prices.length > 0) {
+                        typeStats[type] = {
+                            name: typeNames[type],
+                            avgPrice: prices.reduce((sum, price) => sum + price, 0) / prices.length,
+                            maxPrice: Math.max(...prices),
+                            minPrice: Math.min(...prices),
+                            count: prices.length
+                        };
+                    }
+                }
+            });
+
+            const types = Object.keys(typeStats);
+            const avgPrices = types.map(type => typeStats[type].avgPrice);
+            const maxPrices = types.map(type => typeStats[type].maxPrice);
+            const minPrices = types.map(type => typeStats[type].minPrice);
+            const labels = types.map(type => typeStats[type].name);
+
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            comparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '平均价格',
+                            data: avgPrices,
+                            backgroundColor: '#667eea',
+                            borderColor: '#667eea',
+                            borderWidth: 2
+                        },
+                        {
+                            label: '最高价格',
+                            data: maxPrices,
+                            backgroundColor: '#f093fb',
+                            borderColor: '#f093fb',
+                            borderWidth: 2
+                        },
+                        {
+                            label: '最低价格',
+                            data: minPrices,
+                            backgroundColor: '#4facfe',
+                            borderColor: '#4facfe',
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '不同类型黄金价格对比'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '价格 (元/克)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新数据表格
+        function updateTable() {
+            const selectedBrand = document.getElementById('tableBrandFilter').value;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            let filteredData = goldData;
+            if (selectedBrand !== 'all') {
+                filteredData = goldData.filter(item => item.品牌 === selectedBrand);
+            }
+            
+            // 排序
+            filteredData.sort((a, b) => {
+                switch(sortBy) {
+                    case 'date':
+                        return new Date(b.日期) - new Date(a.日期);
+                    case 'price':
+                        return b.价格_数值 - a.价格_数值;
+                    case 'brand':
+                        return a.品牌.localeCompare(b.品牌);
+                    default:
+                        return 0;
+                }
+            });
+            
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            filteredData.forEach(item => {
+                const row = document.createElement('tr');
+                const changeClass = item.涨跌 === '涨' ? 'price-up' : 
+                                  item.涨跌 === '跌' ? 'price-down' : 'price-same';
+                
+                row.innerHTML = `
+                    <td>${item.日期}</td>
+                    <td>${item.黄金类型 || '首饰黄金'}</td>
+                    <td>${item.品牌}</td>
+                    <td>${item.产品 || '-'}</td>
+                    <td>${item.价格}</td>
+                    <td class="${changeClass}">${item.涨跌}</td>
+                    <td>${item.数据来源}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 页面加载完成后加载数据
+        document.addEventListener('DOMContentLoaded', function() {
+            loadGoldData();
+        });
+    </script>
+</body>
+</html>
